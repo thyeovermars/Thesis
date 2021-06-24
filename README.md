@@ -29,6 +29,8 @@ Below you can find packages used and the specific versions.
 | `jtools`  | 2.1.3   | Analysis and Presentation of Social Scientific Data |
 | `tidyr`   | 1.1.3   | Tidy messy data |
 | `purrr`   | 0.3.4   | Functional programming tools |
+| `readr`   | 1.4.0   | Read rectangular text data | 
+| `magrittr` | 2.0.1  | A forward-pipe operator for R | 
 
 
 ## Privacy and ethical approval
