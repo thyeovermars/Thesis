@@ -8,12 +8,13 @@ This repository contains all files needed to replicate the simulation study pres
 **Preparation & simulation period:** April 2021 - July 2021
 
 ## Abstract
+The abstract
 
 ## Contents
 This repository is split into several folders.
-1. `Dataset` contains the Pima Indians Diabetes Dataset (PIDD).
-2. `Simulation code` contains the script to do the analysis. 
-3. `Proposal` contains the propasal of the study. 
+1. `Data` contains the Pima Indians Diabetes Dataset (PIDD).
+2. `Proposal` contains the propasal of the study. 
+3. `Simulation code` contains the script to do the analysis. 
 
 ## Privacy and ethical approval
 As this is a simulation study in which not only missingness, but also the data were simulated, no privacy issues had to be dealt with.
