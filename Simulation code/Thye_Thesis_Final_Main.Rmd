@@ -1,0 +1,386 @@
+---
+title: "Thesis: Simulation study that compares imputation procedures in a prediction context"
+author: "Thye Overmars"
+date: "28-6-2021"
+output: html_output
+---
+
+```{r Get libraries}
+set.seed(123)
+library(mice)
+library(dplyr)
+library(magrittr)
+library(readr)
+library(ggplot2)
+library(corrplot)
+library(mvtnorm)
+library(plyr)
+library(purrr)
+library(tidyr)
+library(imputeR)
+library(jtools)
+library(DT)
+
+```
+
+```{r Read in data}
+# read in data C:/Temp/Thesis/
+data <- read_csv("C:/Temp/Thesis/diabetes.csv", 
+                 col_types = cols(Pregnancies = col_integer(), 
+                                  Glucose = col_integer(), 
+                                  BloodPressure = col_integer(), 
+                                  SkinThickness = col_integer(), 
+                                  Insulin = col_integer(), 
+                                  Age = col_integer(), 
+                                  Outcome = col_factor(levels = c("1", "0"))))
+
+# maak 0 waardes NA indien niet in Outcome column
+data %<>% mutate_at(vars(2:8), na_if, y = 0)
+
+# dmv pmm maak de dataset compleet
+imp <- mice(data, m=1, maxit = 35, method = "pmm", print = FALSE)
+
+# complete dataset
+data <- complete(imp)
+
+# look in the complete dataset
+summary(data)
+```
+
+```{r Set the seed}
+#The set. seed() function sets the starting number used to generate a sequence of random numbers 
+#It ensures that you get the same result if you start with that same seed each time you run the same process
+set.seed(123)
+```
+
+```{r Complete model}
+#complete model; generalized linear model, all variables included
+
+model_complete <- glm(Outcome ~ Pregnancies + Glucose + BloodPressure + SkinThickness + Insulin + BMI + DiabetesPedigreeFunction + Age, data=data, family = "binomial")
+
+summary(model_complete)
+summary(model_complete$coefficients)
+
+cor(select(data, Pregnancies, Glucose, BloodPressure, SkinThickness, Insulin, BMI, DiabetesPedigreeFunction, Age))
+```
+
+```{r Formulating a function for the Analyse model}
+#Formulate an analysis model
+
+#Function of the analyse model with three selected predictors 
+analyse_model <- function(x){ 
+  lm(BloodPressure ~  BMI + Age + SkinThickness + Glucose, data=x)
+}
+
+# Y = BloodPressure
+# Predictors = Age + BMI + SkinThickness + Glucose
+```
+
+```{r Run the Analyse model}
+#Run the analysis model on the data set to obtain the true data inference
+analyse <- data %>% select(3, 6, 8, 4, 2)
+
+analyse_model(data)
+summaryanalysemodel <- summary(analyse_model(data)) #overview of the model
+confint(analyse_model(data)) #confidence interval
+estimates.analysemodel <- summaryanalysemodel[["coefficients"]][1:5] %>% unlist()
+```
+
+
+```{r Create Missing values Imputations methods function}
+set.seed(123)
+nsim = 1000 #number of iterations
+p = 0.5
+
+# Defining 3 missingness patterns
+pattern.1 <- matrix(c(1,0,1,0,1,0,1,1,1))
+pattern.2 <- matrix(c(1,0,0,1,0,1,1,1,1))
+pattern.3 <- matrix(c(1,1,0,0,1,0,1,1,1))
+mypatterns <- cbind(pattern.1, pattern.2, pattern.3) %>% t()
+
+
+simulate <- function(complete.data){
+  
+  data <- complete.data[,2:6]
+  # Amputating the data set and selecting variables of interest
+  missing <- ampute(complete.data, prop = p, patterns = mypatterns,
+                    mech = "MCAR") 
+  missing <- missing[["amp"]]
+  missing <- missing[,2:6]
+  
+  #imputation methods  
+  imp.mean <- mice(missing, method = "mean", m = 1, maxit = 1, printFlag = FALSE)
+  imp.reg <- mice(missing, method = "norm.predict", m = 1, maxit = 1, printFlag = FALSE)
+  imp.stoch.m1 <- mice(missing, method = "norm.nob", m = 1, maxit = 7, printFlag = FALSE)
+  imp.stoch.m5 <- mice(missing, method = "norm.nob", m = 5, maxit = 7, printFlag = FALSE)
+  imp.bayes.m1 <- mice(missing, method = "norm", m = 1, maxit = 7, printFlag = FALSE)
+  imp.bayes.m5 <- mice(missing, method = "norm", m = 5, maxit = 7, printFlag = FALSE)
+  imp.pmm.m1 <- mice(missing, method = "pmm", m = 1, maxit = 7, printFlag = FALSE)
+  imp.pmm.m5 <- mice(missing, method = "pmm", m = 5, maxit = 7, printFlag = FALSE)
+  
+  #return list with results
+  return(list(imp.mean = imp.mean, imp.reg = imp.reg, imp.stoch.m1 = imp.stoch.m1, 
+               imp.stoch.m5 = imp.stoch.m5, imp.bayes.m1 = imp.bayes.m1, imp.bayes.m5 = imp.bayes.m5,
+               imp.pmm.m1 = imp.pmm.m1, imp.pmm.m5 = imp.pmm.m5, 
+               data = data))
+}
+
+#run simulation
+result <- replicate(nsim, simulate(data), simplify = FALSE)
+result #imputed result
+```
+
+```{r True estimates observed data}
+
+#True estimates
+
+true.estimates <- function(x){
+
+  # Y mean and variance
+   y.mean <- mean(x$BloodPressure) 
+   y.var <- var(x$BloodPressure)
+   
+   # Creating the models
+   lm <- lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = x)
+   lm1 <- lm(BMI ~ BloodPressure + Insulin + SkinThickness + Glucose, data = x)
+   lm2 <- lm(Insulin ~ BMI + BloodPressure + SkinThickness + Glucose, data = x)
+   lm3 <- lm(SkinThickness ~ BMI + Insulin + BloodPressure + Glucose, data = x)
+   lm4 <- lm(Glucose ~ BMI + Insulin + SkinThickness + BloodPressure, data = x)
+   
+   # Predictor betas and standard errors
+   x1.beta <- summary(lm) %>% .$coefficients %>% .[2,1]
+   x2.beta <- summary(lm) %>% .$coefficients %>% .[3,1]
+   x3.beta <- summary(lm) %>% .$coefficients %>% .[4,1]
+   x4.beta <- summary(lm) %>% .$coefficients %>% .[5,1]
+   
+   x1.beta.se <- summary(lm) %>% .$coefficients %>% .[2,2]
+   x2.beta.se <- summary(lm) %>% .$coefficients %>% .[3,2]
+   x3.beta.se <- summary(lm) %>% .$coefficients %>% .[4,2]
+   x4.beta.se <- summary(lm) %>% .$coefficients %>% .[5,2]
+   
+   # reverse regression parameters
+   y.beta.1 <- lm1 %>% coefficients %>% .[2]
+   y.beta.2 <- lm2  %>% coefficients %>% .[3]
+   y.beta.3 <- lm3 %>% coefficients %>% .[4]
+   y.beta.4 <- lm4 %>% coefficients %>% .[5]
+   
+   # r-squared, residual variance and RMSE
+   r.squared <- summary(lm)$r.squared
+   res.var <- (lm) %>% residuals %>% var()
+   RMSE.BloodPressure = 0
+   RMSE.BMI = 0
+   RMSE.Insulin = 0
+   RMSE.SkinThickness = 0
+   RMSE.Glucose = 0
+   
+   
+   y.coverage = 1 
+   x1.coverage = 1 
+   x2.coverage = 1 
+   x3.coverage = 1 
+   x4.coverage = 1 
+   
+   x1.ciw = 1
+   x2.ciw = 1
+   x3.ciw = 1
+   x4.ciw = 1
+   
+   DF <- 1
+   SE <- 1
+   INT <- 1
+   
+  return(c(y.mean, y.mean - y.mean, y.mean - INT, y.mean + INT, y.var, x1.beta, x1.beta.se, x2.beta, x2.beta.se, x3.beta, x3.beta.se, x4.beta, x4.beta.se,
+             r.squared, res.var, RMSE.BloodPressure, RMSE.BMI, RMSE.Insulin, RMSE.SkinThickness, RMSE.Glucose, y.coverage, x1.coverage, x2.coverage, x3.coverage, x4.coverage, x1.ciw, x2.ciw, x3.ciw, x4.ciw))
+
+     
+}
+```
+
+```{r RMSE function}
+
+rmse <- function(data, imp, v = "x") {
+  mx <- is.na(mice::complete(imp, 0))[, v]
+  mse <- rep(NA, imp$m)
+  for (k in seq_len(imp$m)) {
+    filled <- mice::complete(imp, k)[mx, v]
+    true <- data[mx, v]
+    mse[k] <- mean((filled - true)^2)
+  }
+  sqrt(mean(mse))
+}
+
+
+```
+
+```{r Statistics function imputed}
+
+statistics <- function(x) {
+   
+   #data
+   mids <- complete(x, action = "all") #mids
+   m <- x[[3]] # Amount of imputations
+   
+   # multiple imputation analysis
+   if (m > 1) {
+      fit <- with(x, lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose))
+      
+      est <- pool(fit) #adjusted pooling rules (Vink 2014)
+      summary <- summary(est, conf.int = TRUE) %>% 
+         mutate(var = est$pooled$b + (est$pooled$b/est$pooled$m), 
+                `2.5 %` = estimate - qt(.975, df) * sqrt(var),
+                `97.5 %`= estimate + qt(.975, df) * sqrt(var),
+                std.error = sqrt(var))
+      
+      x1.beta.CI.low <- summary  %>% filter(term == "BMI") %>% select(c(`2.5 %`)) %>% unlist()
+      x1.beta.CI.high <- summary  %>% filter(term == "BMI") %>% select(c(`97.5 %`)) %>% unlist()
+      x2.beta.CI.low <- summary  %>% filter(term == "Insulin") %>% select(c(`2.5 %`)) %>% unlist()
+      x2.beta.CI.high <- summary  %>% filter(term == "Insulin") %>% select(c(`97.5 %`)) %>% unlist()
+      x3.beta.CI.low <- summary  %>% filter(term == "SkinThickness") %>% select(c(`2.5 %`)) %>% unlist()
+      x3.beta.CI.high <- summary  %>% filter(term == "SkinThickness") %>% select(c(`97.5 %`)) %>% unlist()
+      x4.beta.CI.low <- summary  %>% filter(term == "Glucose") %>% select(c(`2.5 %`)) %>% unlist()
+      x4.beta.CI.high <- summary  %>% filter(term == "Glucose") %>% select(c(`97.5 %`)) %>% unlist()
+      
+      x1.beta <- est$pooled$estimate[2] # BMI
+      x2.beta <- est$pooled$estimate[3] # Insulin
+      x3.beta <- est$pooled$estimate[4] # SkinThickness
+      x4.beta <- est$pooled$estimate[5] # Glucose
+      
+      x1.beta.se <- summary(est)$std.error[[2]] # BMI
+      x2.beta.se <- summary(est)$std.error[[3]] # Insulin
+      x3.beta.se <- summary(est)$std.error[[4]] # SkinThickness
+      x4.beta.se <- summary(est)$std.error[[5]] # Glucose 
+  
+      r.squared <- mean(est$glanced$r.squared) 
+      res.var <- (mean(est$glanced$sigma))^2
+      
+   } 
+   
+   # single imputation analysis
+   else {
+      fit <- mids %>% map(~lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = .x)) %>% .[[1]]
+      
+      x1.beta <- mids %>% map(~lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = .x)) %>%         
+        map(coefficients) %>% map_df("BMI") %>% unlist()
+      x2.beta <- mids %>% map(~lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = .x)) %>%
+        map(coefficients) %>% map_df("Insulin") %>% unlist()
+      x3.beta <- mids %>% map(~lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = .x)) %>%
+        map(coefficients) %>% map_df("SkinThickness") %>% unlist()
+      x4.beta <- mids %>% map(~lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = .x)) %>%
+        map(coefficients) %>% map_df("Glucose") %>% unlist()
+      
+      x1.beta.se <- summary(lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = mids[[1]]))$coefficients[2,2]
+      x2.beta.se <- summary(lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = mids[[1]]))$coefficients[3,2]
+      x3.beta.se <- summary(lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = mids[[1]]))$coefficients[4,2]
+      x4.beta.se <- summary(lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = mids[[1]]))$coefficients[5,2]
+      
+      
+      x1.beta.CI.low <- summ(fit, confint = TRUE, digits = 4) %>% .$coeftable %>% .["BMI", 2]
+      x1.beta.CI.high <- summ(fit, confint = TRUE, digits = 4) %>% .$coeftable %>% .["BMI", 3]
+      x2.beta.CI.low <- summ(fit, confint = TRUE, digits = 4) %>% .$coeftable %>% .["Insulin", 2]
+      x2.beta.CI.high <- summ(fit, confint = TRUE, digits = 4) %>% .$coeftable %>% .["Insulin", 3]
+      x3.beta.CI.low <- summ(fit, confint = TRUE, digits = 4) %>% .$coeftable %>% .["SkinThickness", 2]
+      x3.beta.CI.high <- summ(fit, confint = TRUE, digits = 4) %>% .$coeftable %>% .["SkinThickness", 3]
+      x4.beta.CI.low <- summ(fit, confint = TRUE, digits = 4) %>% .$coeftable %>% .["Glucose", 2]
+      x4.beta.CI.high <- summ(fit, confint = TRUE, digits = 4) %>% .$coeftable %>% .["Glucose", 3]
+      
+      r.squared <- summary(lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = mids[[1]]))$r.squared 
+      res.var <- mids %>% map(~lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose,data = .x)) %>% map(residuals) %>% map_df(var) %>% unlist()
+   }
+   
+   # y mean, CI
+   truedata <- get("data", envir = .GlobalEnv)
+   
+   y.true <- truedata$BloodPressure %>% mean()
+   y.mean <- mids %>% map_df(~mean(.$BloodPressure)) %>% t() %>% mean()
+   y.se <- mids %>% map_df(~sd(.$BloodPressure)) %>% t() %>% "/"(sqrt(nrow(mids[[1]]))) %>% mean()
+   y.interval <- qt(.975, (nrow(mids[[1]]) -1)) * y.se
+   y.lower <- y.mean - y.interval
+   y.up <- y.mean + y.interval
+   y.coverage <- y.lower < y.true & y.true < y.up
+   
+   
+   DF <-  mids %>% map_df("BloodPressure") %>% nrow()
+   SD <-  mids %>% map_df(~sd(.$BloodPressure)) %>% t() %>% mean()
+   SE <- SD / sqrt(nrow(mids[[1]]))
+   INT <- qt(.975, DF) * SE
+   
+   #Coverage predictor variabelen 
+  
+  x1.true <- lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = truedata)$coefficients[-1] %>% .["BMI"]
+  x1.coverage <- x1.beta.CI.low < x1.true & x1.true < x1.beta.CI.high
+  
+  #x2.true <- truedata$Insulin %>% mean()
+  x2.true <- lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = truedata)$coefficients[-1] %>% .["Insulin"]
+  x2.coverage <- x2.beta.CI.low < x2.true & x2.true < x2.beta.CI.high
+  
+  x3.true <- lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = truedata)$coefficients[-1] %>% .["SkinThickness"]
+  x3.coverage <- x3.beta.CI.low < x3.true & x3.true < x3.beta.CI.high
+  
+  x4.true <- lm(BloodPressure ~ BMI + Insulin + SkinThickness + Glucose, data = truedata)$coefficients[-1] %>% .["Glucose"]
+  x4.coverage <- x4.beta.CI.low < x4.true & x4.true < x4.beta.CI.high
+                      
+  #ciw
+  x1.ciw <- x1.beta.CI.high - x1.beta.CI.low 
+  x2.ciw <- x2.beta.CI.high - x2.beta.CI.low 
+  x3.ciw <- x3.beta.CI.high - x3.beta.CI.low 
+  x4.ciw <- x4.beta.CI.high - x4.beta.CI.low 
+  
+   # y variance, CI 
+   y.var <- mids %>% map_df(~var(.$BloodPressure)) %>% t() %>% mean()
+  
+   
+    # RMSE load rmse function
+   RMSE.BloodPressure <- rmse(data, x, "BloodPressure")
+   RMSE.BMI <- rmse(data, x, "BMI")
+   RMSE.Insulin <- rmse(data, x, "Insulin")
+   RMSE.SkinThickness <- rmse(data, x, "SkinThickness")
+   RMSE.Glucose <- rmse(data, x, "Glucose")
+
+    return(c(y.mean, y.mean - y.true, y.mean - y.interval, y.mean + y.interval, y.var, x1.beta, x1.beta.se, x2.beta, x2.beta.se, x3.beta, x3.beta.se, x4.beta, x4.beta.se,
+             r.squared, res.var, RMSE.BloodPressure, RMSE.BMI, RMSE.Insulin, RMSE.SkinThickness, RMSE.Glucose, y.coverage, x1.coverage, x2.coverage, x3.coverage, x4.coverage, x1.ciw, x2.ciw, x3.ciw, x4.ciw)) 
+}
+
+format <- (c("y.mean" = 0, "Bias Y" = 0, "Lower Y" = 0, "Upper Y" = 0, "y.var" = 0, "x1.beta" = 0, "x1.beta.se" = 0, "x2.beta" = 0, "x2.beta.se" = 0, "x3.beta" = 0, "x3.beta.se" = 0, "x4.beta" = 0, "x4.beta.se" = 0, "r.squared" = 0, "res.var" = 0, "RMSE.BloodPressure" = 0, "RMSE.BMI" = 0, "RMSE.Insulin" = 0, "RMSE.SkinThickness" = 0, "RMSE.Glucose" = 0, "y.coverage" = 0, "x1.coverage" = 0, "x2.coverage" = 0, "x3.coverage" = 0, "x4.coverage" = 0, "x1.ciw" = 0, "x2.ciw" = 0, "x3.ciw" = 0, "x4.ciw" = 0))
+
+
+```
+
+```{r Summary of statistics}
+# Summary of statistics
+
+statistics_summary <- function(x){
+  
+# True data
+data <- x %>% map("data") %>% vapply(., true.estimates, format) %>% t()
+data <- colMeans(data) 
+
+# imp mean
+mean <- x %>% map("imp.mean") %>% vapply(., statistics, format) %>% t()
+mean <- colMeans(mean)
+
+reg <- x %>% map("imp.reg") %>% vapply(., statistics, format) %>% t()
+reg <- colMeans(reg)
+  
+stoch.m1 <- x %>% map("imp.stoch.m1") %>% vapply(., statistics, format) %>% t()
+stoch.m1 <- colMeans(stoch.m1)
+
+stoch.m5  <- x %>% map("imp.stoch.m5") %>% vapply(., statistics, format) %>% t()
+stoch.m5 <- colMeans(stoch.m5)
+
+bayes.m1 <- x %>% map("imp.bayes.m1") %>% vapply(., statistics, format) %>% t()
+bayes.m1 <- colMeans(bayes.m1)
+
+bayes.m5 <- x %>% map("imp.bayes.m5") %>% vapply(., statistics, format) %>% t()
+bayes.m5 <- colMeans(bayes.m5)
+
+pmm.m1 <- x %>% map("imp.pmm.m1") %>% vapply(., statistics, format) %>% t()
+pmm.m1 <- colMeans(pmm.m1)
+
+pmm.m5 <- x %>% map("imp.pmm.m5") %>% vapply(., statistics, format) %>% t()
+pmm.m5 <- colMeans(pmm.m5)
+
+  return(rbind(data, mean, reg, stoch.m1, stoch.m5, bayes.m1, bayes.m5, pmm.m1, pmm.m5 ))
+}
+
+final_result <- statistics_summary(result) 
+```
