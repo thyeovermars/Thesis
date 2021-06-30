@@ -1,6 +1,6 @@
 # Simulation study that compares imputation procedures in a prediction context
 This repository contains all files needed to replicate the simulation study presented in 
-_"Simulation study that compares multiple imputation procedures in a prediction context"_. This project served as my MSc thesis, and was completed at the Applied Data Science at Utrecht University, Netherlands.
+_"Simulation study that compares imputation procedures in a prediction context"_. This project served as my MSc thesis, and was completed at the Applied Data Science at Utrecht University, Netherlands.
 
 ## Simulation period 
 **Author:** Thye Overmars
