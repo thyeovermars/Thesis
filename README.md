@@ -33,8 +33,8 @@ Below you can find packages used and the specific versions.
 | `magrittr` | 2.0.1  | A forward-pipe operator for R | 
 
 
-## Privacy and ethical approval
-As this is a simulation study in which not only missingness, but also the data were simulated, no privacy issues had to be dealt with.
+## Privacy and ethical considerations
+As this is a simulation study in which not only missingness, but also the data were simulated, no privacy issues and ethical considerations had to be dealt with.
 
 ## Contact
 For questions or suggestions, please contact the person responsible for this archive.
