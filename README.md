@@ -8,7 +8,7 @@ _"Simulation study that compares imputation procedures in a prediction context"_
 **Preparation & simulation period:** April 2021 - July 2021
 
 ## Abstract
-Missing values are the Achilles’s heel for a data scientist, and need to be handled properly during data pre-processing to prevent misleading results. Imputation is the process of replacing missing data with synthetic values to obtain a completed dataset. There are different imputation methods, and the aim of this study is to evaluate the statistical properties of imputed data obtained using different imputation methods, compared to the true data. In this simulation study, I first obtained an incomplete dataset from the observed data. The observed data is the Pima Indians Diabetes Dataset. Thereafter, the generated imputation data is done by different imputation techniques. The results show that different evaluation techniques show different imputation methods as the best prediction method. Different performance measures yield different conclusions about the imputation methods. The unwary simulator has to look carefully and might be tempted to choose a less good method. A logical starting point is to use a multiple imputation method by default, preferably Bayesian linear regression imputation or stochastic regression imputation. With these two methods you are at least sure of valid estimates, even though they may not be the best predictions. 
+Missing values are the Achilles' heel for a data scientist, and need to be handled properly during data pre-processing to prevent misleading results. Imputation is the process of replacing missing data with synthetic values to obtain a completed dataset. There are different imputation methods, and the aim of this study is to evaluate the statistical properties of imputed data obtained using different imputation methods, compared to the true data. In this simulation study, I first obtained an incomplete dataset from the observed data. The observed data is the Pima Indians Diabetes Dataset. After that, the generated imputation data is done by different imputation techniques. The results show that different evaluation techniques show different imputation methods as the best prediction method. Different performance measures yield different conclusions about the imputation methods. The unwary simulator has to look carefully and might be tempted to choose a less suitable method. A logical starting point is to use a multiple imputation method by default, preferably Bayesian linear regression imputation or stochastic regression imputation. With these two methods, you are at least sure of valid estimates, even though they may not be the best predictions.
 
 ## Contents
 This repository is split into several folders.
@@ -34,7 +34,7 @@ Below you can find packages used and the specific versions.
 
 
 ## Privacy and ethical considerations
-As this is a simulation study in which not only missingness, but also the data were simulated, no privacy issues and ethical considerations had to be dealt with.
+As this is a simulation study in which missingness and the data were simulated, no privacy issues and ethical considerations had to be dealt with.
 
 ## Contact
 For questions or suggestions, please contact the person responsible for this archive.
